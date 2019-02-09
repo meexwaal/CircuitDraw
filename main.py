@@ -1,7 +1,7 @@
 import sys, math
 from enum import Enum
 from PySide2 import QtCore, QtGui, QtWidgets
-from PySide2.QtCore import Qt, QPoint
+from PySide2.QtCore import Qt, QPoint, QRect
 from PySide2.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
                                QLabel, QPushButton, QLineEdit)
 from PySide2.QtGui import QPen, QPainter, QPolygon, QPalette, QColor
@@ -59,13 +59,15 @@ class Module(BaseObject):
         self.update_rect()
 
     def update_rect(self):
-        self.rect = QtCore.QRect(self.pos[0], self.pos[1],
-                                 self.size[0], self.size[1])
+        self.rect = QRect(self.pos[0], self.pos[1], self.size[0], self.size[1])
 
     def draw(self, painter):
         super().draw(painter)
 
         painter.drawRect(self.rect)
+        # Text is drawn based on self.rect
+        painter.drawText(self.rect, 0, self.label)
+
 
     def in_bounds(self, pos):
         return self.rect.contains(pos[0], pos[1])
@@ -183,6 +185,7 @@ class Canvas(QWidget):
                 for o in self.selected:
                     o.label = val
 
+            self.update()
         return f
 
     def mousePressEvent(self, event):

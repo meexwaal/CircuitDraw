@@ -220,19 +220,29 @@ class Canvas(QWidget):
         self.update()
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_W:
-            # Go into wire drawing mode
-            self.mode = CanvasMode.DRAW_WIRE
-            self.active = None
-        elif event.key() == Qt.Key_M:
-            # Go into module drawing mode
-            self.mode = CanvasMode.DRAW_MODULE
-            self.active = None
+        if self.mode == CanvasMode.NORMAL:
+            if event.key() == Qt.Key_W:
+                # Go into wire drawing mode
+                self.mode = CanvasMode.DRAW_WIRE
+                self.active = None
+            elif event.key() == Qt.Key_M:
+                # Go into module drawing mode
+                self.mode = CanvasMode.DRAW_MODULE
+                self.active = None
+            elif event.key() == Qt.Key_Backspace:
+                # Delete selected objects
+                for i in range(len(self.objects)-1, -1, -1):
+                    # Iterate backwards so we don't have to fix i on deletion
+                    if self.objects[i].selected:
+                        del self.objects[i]
+
         elif event.key() == Qt.Key_Escape:
             # Go into normal mode
             self.mode = CanvasMode.NORMAL
             self.active = None
+
         print(self.mode)
+        self.update()
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication()

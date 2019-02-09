@@ -7,8 +7,8 @@ from PySide2.QtGui import QPen, QPainter
 
 class BaseObject():
     def __init__(self):
-        self.pos = (200,200)
-        self.size = (100,100)
+        self.pos = [200,200]
+        self.size = [100,100]
         self.label = None
         self.selected = False
 
@@ -20,6 +20,11 @@ class BaseObject():
 
     def select(self):
         self.selected = not self.selected
+
+    def move(self, dx, dy):
+        self.pos[0] += dx
+        self.pos[1] += dy
+
 
 class PortType(Enum):
     UNDEF = -1
@@ -40,6 +45,9 @@ class Module(BaseObject):
         super().__init__()
 
         self.ports = []
+        self.update_rect()
+
+    def update_rect(self):
         self.rect = QtCore.QRect(self.pos[0], self.pos[1],
                                  self.size[0], self.size[1])
 
@@ -53,6 +61,11 @@ class Module(BaseObject):
 
     def in_bounds(self, pos):
         return self.rect.contains(pos[0], pos[1])
+
+    def move(self, dx, dy):
+        super().move(dx, dy)
+        self.update_rect()
+
 
 class WireSegment(BaseObject):
     def __init__(self):
@@ -72,6 +85,7 @@ class Canvas(QWidget):
 
         test_module = Module()
         self.objects = [test_module]
+        self.last_mouse_pos = None
 
     def paintEvent(self, event):
         pen = QPen()
@@ -84,8 +98,20 @@ class Canvas(QWidget):
 
         painter.end()
 
+    def mouseMoveEvent(self, event):
+        dx = event.pos().x() - self.last_mouse_pos.x()
+        dy = event.pos().y() - self.last_mouse_pos.y()
+        for o in self.objects:
+            if o.selected:
+                o.move(dx, dy)
+
+        self.last_mouse_pos = event.pos()
+        self.update()
+
     def mousePressEvent(self, event):
-        pos = (event.pos().x(), event.pos().y())
+        self.last_mouse_pos = event.pos()
+
+        pos = [event.pos().x(), event.pos().y()]
         for o in self.objects:
             if o.in_bounds(pos):
                 o.select()

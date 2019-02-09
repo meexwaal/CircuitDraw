@@ -24,8 +24,8 @@ class BaseObject():
             pen = QPen(Qt.green, 2, Qt.SolidLine)
         painter.setPen(pen)
 
-    def select(self):
-        self.selected = not self.selected
+    def select(self, selected):
+        self.selected = selected
 
     def move(self, dx, dy):
         self.pos[0] += dx
@@ -153,6 +153,7 @@ class Canvas(QWidget):
         test_module = Module()
         test_wire = Wire([[100,200],[100,350],[350,350],[350,250]])
         self.objects = [test_module, test_wire]
+        self.selected = []
         self.last_mouse_pos = None
         self.mode = CanvasMode.NORMAL
         self.setMouseTracking(True) # Always receive mouse move events
@@ -179,9 +180,8 @@ class Canvas(QWidget):
     def update_prop(self, prop):
         def f(val): # Do you even curry, bro?
             if prop == "Name":
-                for o in self.objects:
-                    if o.selected:
-                        o.label = val
+                for o in self.selected:
+                    o.label = val
 
         return f
 
@@ -192,13 +192,20 @@ class Canvas(QWidget):
         if self.mode == CanvasMode.NORMAL:
             for o in self.objects:
                 if o.in_bounds(pos):
-                    o.select()
+                    o.select(True)
+                    self.selected.append(o)
                     print("clicked:", o)
+                elif o.selected:
+                    o.select(False)
+                    self.selected.remove(o)
 
         elif self.mode == CanvasMode.DRAW_WIRE:
             if self.active == None:
                 print("New wire")
-                new_wire = Wire([pos, pos]) # Need 2 points to define a line
+                # The last point will be moved as you move your mouse,
+                # so we need another copy to anchor the wire
+                new_wire = Wire([pos, pos])
+
                 self.active = new_wire
                 self.objects.append(new_wire)
             elif self.active.__class__ == Wire:
@@ -259,9 +266,8 @@ class Canvas(QWidget):
 
         if self.mode == CanvasMode.NORMAL:
             if event.buttons() != Qt.NoButton: # Only drag if mouse down
-                for o in self.objects:
-                    if o.selected:
-                        o.move(dx, dy)
+                for o in self.selected:
+                    o.move(dx, dy)
         elif self.mode == CanvasMode.DRAW_WIRE:
             if self.active != None and self.active.__class__ == Wire:
                 self.active.remove_pt(-1)  # Remove the last point
@@ -289,6 +295,8 @@ class Canvas(QWidget):
                 for i in range(len(self.objects)-1, -1, -1):
                     # Iterate backwards so we don't have to fix i on deletion
                     if self.objects[i].selected:
+                        to_del = self.objects[i]
+                        self.selected.remove(to_del)
                         del self.objects[i]
 
         elif event.key() == Qt.Key_Escape:

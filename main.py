@@ -2,8 +2,9 @@ import sys, math
 from enum import Enum
 from PySide2 import QtCore, QtGui, QtWidgets
 from PySide2.QtCore import Qt, QPoint
-from PySide2.QtWidgets import QApplication, QWidget
-from PySide2.QtGui import QPen, QPainter, QPolygon
+from PySide2.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout,
+                               QLabel, QPushButton, QLineEdit)
+from PySide2.QtGui import QPen, QPainter, QPolygon, QPalette, QColor
 
 MIN_SIZE = 5
 
@@ -147,7 +148,7 @@ class CanvasMode(Enum):
 
 class Canvas(QWidget):
     def __init__(self):
-        super().__init__()
+        QWidget.__init__(self)
 
         test_module = Module()
         test_wire = Wire([[100,200],[100,350],[350,350],[350,250]])
@@ -156,6 +157,12 @@ class Canvas(QWidget):
         self.mode = CanvasMode.NORMAL
         self.setMouseTracking(True) # Always receive mouse move events
         self.active = None # Object we are drawing/resizing
+
+        self.setFocusPolicy(Qt.StrongFocus)
+
+    # Define a default size
+    def sizeHint(self):
+        return QtCore.QSize(500,500)
 
     def paintEvent(self, event):
         pen = QPen()
@@ -167,6 +174,16 @@ class Canvas(QWidget):
             o.draw(painter)
 
         painter.end()
+
+    # Called by PropertiesBox when a field is changed
+    def update_prop(self, prop):
+        def f(val): # Do you even curry, bro?
+            if prop == "Name":
+                for o in self.objects:
+                    if o.selected:
+                        o.label = val
+
+        return f
 
     def mousePressEvent(self, event):
         self.last_mouse_pos = event.pos()
@@ -239,12 +256,12 @@ class Canvas(QWidget):
         dx = event.pos().x() - self.last_mouse_pos.x()
         dy = event.pos().y() - self.last_mouse_pos.y()
         pos = (event.pos().x(), event.pos().y())
-        #print(event.buttons() == Qt.NoButton)
 
         if self.mode == CanvasMode.NORMAL:
-            for o in self.objects:
-                if o.selected:
-                    o.move(dx, dy)
+            if event.buttons() != Qt.NoButton: # Only drag if mouse down
+                for o in self.objects:
+                    if o.selected:
+                        o.move(dx, dy)
         elif self.mode == CanvasMode.DRAW_WIRE:
             if self.active != None and self.active.__class__ == Wire:
                 self.active.remove_pt(-1)  # Remove the last point
@@ -282,10 +299,62 @@ class Canvas(QWidget):
         print(self.mode)
         self.update()
 
+    def focusInEvent(self, event):
+        # Set a yellow background
+        palette = QPalette()
+        palette.setColor(QPalette.Window, QColor(240,240,220))
+        self.setAutoFillBackground(True)
+        self.setPalette(palette)
+        self.update()
+
+    def focusOutEvent(self, event):
+        # Set a grey background
+        palette = QPalette()
+        palette.setColor(QPalette.Window, QColor(230,230,230))
+        self.setAutoFillBackground(True)
+        self.setPalette(palette)
+        self.update()
+
+class PropertiesBox(QWidget):
+    def __init__(self, canvas):
+        QWidget.__init__(self)
+        self.canvas = canvas
+
+        # Set a background
+        palette = QPalette()
+        palette.setColor(QPalette.Window, QColor(200,200,200))
+        self.setAutoFillBackground(True)
+        self.setPalette(palette)
+
+        self.name_label = QLabel("Name")
+        self.name_field = QLineEdit()
+        self.name_field.textChanged.connect(canvas.update_prop("Name"))
+        self.name_button = QPushButton("Enter")
+
+        self.layout = QVBoxLayout()
+        self.layout.addWidget(self.name_label)
+        self.layout.addWidget(self.name_field)
+        self.layout.addWidget(self.name_button)
+        self.setLayout(self.layout)
+
+def update_prop(val0):
+    print(val0)
+
+class Window(QWidget):
+    def __init__(self):
+        QWidget.__init__(self)
+        self.canvas = Canvas()
+        self.prop_box = PropertiesBox(self.canvas)
+
+        self.layout = QHBoxLayout()
+        self.layout.addWidget(self.canvas)
+        self.layout.addWidget(self.prop_box)
+        self.setLayout(self.layout)
+
 if __name__ == "__main__":
     app = QtWidgets.QApplication()
 
-    canvas = Canvas()
-    canvas.show()
+    window = Window()
+    window.show()
 
     sys.exit(app.exec_())

@@ -1,9 +1,9 @@
 import sys, math
 from enum import Enum
 from PySide2 import QtCore, QtGui, QtWidgets
-from PySide2.QtCore import Qt
+from PySide2.QtCore import Qt, QPoint
 from PySide2.QtWidgets import QApplication, QWidget
-from PySide2.QtGui import QPen, QPainter
+from PySide2.QtGui import QPen, QPainter, QPolygon
 
 class BaseObject():
     def __init__(self):
@@ -16,7 +16,10 @@ class BaseObject():
         return False
 
     def draw(self, painter):
-        pass
+        pen = QPen(Qt.black, 2, Qt.SolidLine)
+        if self.selected:
+            pen = QPen(Qt.green, 2, Qt.SolidLine)
+        painter.setPen(pen)
 
     def select(self):
         self.selected = not self.selected
@@ -52,11 +55,8 @@ class Module(BaseObject):
                                  self.size[0], self.size[1])
 
     def draw(self, painter):
-        pen = QPen(Qt.black, 2, Qt.SolidLine)
-        if self.selected:
-            pen = QPen(Qt.green, 2, Qt.SolidLine)
+        super().draw(painter)
 
-        painter.setPen(pen)
         painter.drawRect(self.rect)
 
     def in_bounds(self, pos):
@@ -66,25 +66,50 @@ class Module(BaseObject):
         super().move(dx, dy)
         self.update_rect()
 
-
-class WireSegment(BaseObject):
-    def __init__(self):
-        super().__init__()
-
-
 class Wire(BaseObject):
-    def __init__(self):
+    def __init__(self, points = []):
         super().__init__()
 
         self.port = None
-        self.segments = []
+        self.points = points
+        self.update_line()
+
+    def update_line(self):
+        self.line = QPolygon([QPoint(p[0],p[1]) for p in self.points])
+
+    def draw(self, painter):
+        super().draw(painter)
+
+        painter.drawPolyline(self.line)
+
+    def in_bounds(self, pos):
+        BOX_RADIUS = 10
+        for i in range(1, len(self.points)):
+            p0 = self.points[i-1]
+            p1 = self.points[i]
+            if ((min(p0[0],p1[0]) - BOX_RADIUS
+                 <= pos[0]
+                 <= max(p0[0],p1[0]) + BOX_RADIUS) and
+                (min(p0[1],p1[1]) - BOX_RADIUS
+                 <= pos[1]
+                 <= max(p0[1],p1[1]) + BOX_RADIUS)):
+                return True
+
+    def move(self, dx, dy):
+        super().move(dx, dy)
+        for p in self.points:
+            p[0] += dx
+            p[1] += dy
+
+        self.update_line()
 
 class Canvas(QWidget):
     def __init__(self):
         super().__init__()
 
         test_module = Module()
-        self.objects = [test_module]
+        test_wire = Wire([[100,200],[100,350],[350,350],[350,250]])
+        self.objects = [test_module, test_wire]
         self.last_mouse_pos = None
 
     def paintEvent(self, event):

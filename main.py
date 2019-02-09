@@ -5,6 +5,8 @@ from PySide2.QtCore import Qt, QPoint
 from PySide2.QtWidgets import QApplication, QWidget
 from PySide2.QtGui import QPen, QPainter, QPolygon
 
+MIN_SIZE = 5
+
 class BaseObject():
     def __init__(self):
         self.pos = [200,200]
@@ -28,6 +30,11 @@ class BaseObject():
         self.pos[0] += dx
         self.pos[1] += dy
 
+    def set_pos(self, pos):
+        self.pos = list(pos)
+
+    def set_size(self, size):
+        self.size = [max(d, MIN_SIZE) for d in size]
 
 class PortType(Enum):
     UNDEF = -1
@@ -64,6 +71,14 @@ class Module(BaseObject):
 
     def move(self, dx, dy):
         super().move(dx, dy)
+        self.update_rect()
+
+    def set_pos(self, pos):
+        super().set_pos(pos)
+        self.update_rect()
+
+    def set_size(self, size):
+        super().set_size(size)
         self.update_rect()
 
 class Wire(BaseObject):
@@ -174,6 +189,45 @@ class Canvas(QWidget):
                 self.active.add_point(pos)
 
         elif self.mode == CanvasMode.DRAW_MODULE:
+            if self.active == None:
+                print("New module")
+                new_module = Module()
+                new_module.set_pos(pos)
+                new_module.set_size((0,0))
+                self.active = new_module
+                self.objects.append(new_module)
+
+        self.update()
+
+    def mouseReleaseEvent(self, event):
+        self.last_mouse_pos = event.pos()
+        pos = (event.pos().x(), event.pos().y())
+
+        if self.mode == CanvasMode.NORMAL:
+            pass
+        elif self.mode == CanvasMode.DRAW_WIRE:
+            pass
+        elif self.mode == CanvasMode.DRAW_MODULE:
+            print("Ended module")
+            self.active = None # Finish drawing module
+            self.mode = CanvasMode.NORMAL
+
+        self.update()
+
+    def mouseDoubleClickEvent(self, event):
+        self.last_mouse_pos = event.pos()
+        pos = (event.pos().x(), event.pos().y())
+
+        if self.mode == CanvasMode.NORMAL:
+            pass
+        elif self.mode == CanvasMode.DRAW_WIRE:
+            if self.active != None and self.active.__class__ == Wire:
+                print("Ending wire")
+                self.active.remove_pt(-1) # Remove the currently-drawing pt
+                self.active = None
+                self.mode = CanvasMode.NORMAL
+
+        elif self.mode == CanvasMode.DRAW_MODULE:
             pass
 
         self.update()
@@ -196,27 +250,11 @@ class Canvas(QWidget):
                 self.active.remove_pt(-1)  # Remove the last point
                 self.active.add_point(pos) # Add it back
         elif self.mode == CanvasMode.DRAW_MODULE:
-            pass
+            if self.active != None and self.active.__class__ == Module:
+                self.active.set_size((pos[0] - self.active.pos[0],
+                                      pos[1] - self.active.pos[1]))
 
         self.last_mouse_pos = event.pos()
-        self.update()
-
-    def mouseDoubleClickEvent(self, event):
-        self.last_mouse_pos = event.pos()
-        pos = (event.pos().x(), event.pos().y())
-
-        if self.mode == CanvasMode.NORMAL:
-            pass
-        elif self.mode == CanvasMode.DRAW_WIRE:
-            if self.active != None and self.active.__class__ == Wire:
-                print("Ending wire")
-                self.active.remove_pt(-1) # Remove the currently-drawing pt
-                self.active = None
-                self.mode = CanvasMode.NORMAL
-
-        elif self.mode == CanvasMode.DRAW_MODULE:
-            pass
-
         self.update()
 
     def keyPressEvent(self, event):

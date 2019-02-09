@@ -8,6 +8,9 @@ from PySide2.QtGui import QPen, QPainter, QPolygon, QPalette, QColor
 
 MIN_SIZE = 5
 
+def test_modifier(modifier):
+    return (int(QApplication.keyboardModifiers()) & int(modifier)) != 0
+
 class BaseObject():
     def __init__(self):
         self.pos = [200,200]
@@ -162,6 +165,10 @@ class Canvas(QWidget):
         self.active = None # Object we are drawing/resizing
 
         self.setFocusPolicy(Qt.StrongFocus)
+        self.prop_box = None # Connected PropertiesBox
+
+    def set_prop_box(self, prop_box):
+        self.prop_box = prop_box
 
     # Define a default size
     def sizeHint(self):
@@ -195,12 +202,20 @@ class Canvas(QWidget):
         if self.mode == CanvasMode.NORMAL:
             for o in self.objects:
                 if o.in_bounds(pos):
-                    o.select(True)
-                    self.selected.append(o)
                     print("clicked:", o)
-                elif o.selected:
+                    if not o.selected:
+                        o.select(True)
+                        self.selected.append(o)
+                elif (o.selected
+                      and not test_modifier(Qt.ShiftModifier)
+                      and not test_modifier(Qt.ControlModifier)):
                     o.select(False)
                     self.selected.remove(o)
+
+            if len(self.selected) == 1:
+                self.prop_box.show_props({"Name" : self.selected[0].label})
+            else:
+                self.prop_box.clear_props()
 
         elif self.mode == CanvasMode.DRAW_WIRE:
             if self.active == None:
@@ -337,16 +352,36 @@ class PropertiesBox(QWidget):
         self.setAutoFillBackground(True)
         self.setPalette(palette)
 
-        self.name_label = QLabel("Name")
-        self.name_field = QLineEdit()
-        self.name_field.textChanged.connect(canvas.update_prop("Name"))
-        self.name_button = QPushButton("Enter")
-
         self.layout = QVBoxLayout()
-        self.layout.addWidget(self.name_label)
-        self.layout.addWidget(self.name_field)
-        self.layout.addWidget(self.name_button)
         self.setLayout(self.layout)
+
+        self.widgets = {}
+
+    # Define a default size
+    def sizeHint(self):
+        return QtCore.QSize(100,500)
+
+    def clear_props(self):
+        for k in self.widgets:
+            for w in self.widgets[k]:
+                self.layout.removeWidget(w)
+                w.deleteLater()
+        self.widgets.clear()
+        self.update()
+
+    def show_props(self, props):
+        self.clear_props()
+
+        for k in props:
+            prop_label = QLabel(k)
+            prop_field = QLineEdit()
+            prop_field.setText(props[k])
+            prop_field.textChanged.connect(self.canvas.update_prop(k))
+
+            self.layout.addWidget(prop_label)
+            self.layout.addWidget(prop_field)
+            self.widgets[k] = [prop_label, prop_field]
+
 
 def update_prop(val0):
     print(val0)
@@ -356,6 +391,7 @@ class Window(QWidget):
         QWidget.__init__(self)
         self.canvas = Canvas()
         self.prop_box = PropertiesBox(self.canvas)
+        self.canvas.set_prop_box(self.prop_box)
 
         self.layout = QHBoxLayout()
         self.layout.addWidget(self.canvas)

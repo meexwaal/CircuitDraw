@@ -71,7 +71,7 @@ class Wire(BaseObject):
         super().__init__()
 
         self.port = None
-        self.points = points
+        self.points = [list(p) for p in points] # For mutability
         self.update_line()
 
     def update_line(self):
@@ -83,7 +83,7 @@ class Wire(BaseObject):
         painter.drawPolyline(self.line)
 
     def in_bounds(self, pos):
-        BOX_RADIUS = 10
+        BOX_RADIUS = 10 # Distance from the wire where a click will register
         for i in range(1, len(self.points)):
             p0 = self.points[i-1]
             p1 = self.points[i]
@@ -103,6 +103,33 @@ class Wire(BaseObject):
 
         self.update_line()
 
+    # Return point p algined with q
+    def align(self, p, q):
+        if abs(p[0]-q[0]) < abs(p[1]-q[1]):
+            # x values are closer than y's
+            return [q[0], p[1]]
+        else:
+            return [p[0], q[1]]
+
+    # Add a point as close to p as is reasonable
+    def add_point(self, p):
+        if len(self.points) == 0:
+            self.points.append(list(p))
+        else:
+            last_pt = self.points[-1]
+            self.points.append(self.align(p, last_pt))
+        self.update_line()
+
+    # Remove point at index idx
+    def remove_pt(self, idx):
+        del self.points[idx]
+        self.update_line()
+
+class CanvasMode(Enum):
+    NORMAL = 0
+    DRAW_WIRE = 1
+    DRAW_MODULE = 2
+
 class Canvas(QWidget):
     def __init__(self):
         super().__init__()
@@ -111,6 +138,9 @@ class Canvas(QWidget):
         test_wire = Wire([[100,200],[100,350],[350,350],[350,250]])
         self.objects = [test_module, test_wire]
         self.last_mouse_pos = None
+        self.mode = CanvasMode.NORMAL
+        self.setMouseTracking(True) # Always receive mouse move events
+        self.active = None # Object we are drawing/resizing
 
     def paintEvent(self, event):
         pen = QPen()
@@ -123,28 +153,86 @@ class Canvas(QWidget):
 
         painter.end()
 
-    def mouseMoveEvent(self, event):
-        dx = event.pos().x() - self.last_mouse_pos.x()
-        dy = event.pos().y() - self.last_mouse_pos.y()
-        for o in self.objects:
-            if o.selected:
-                o.move(dx, dy)
-
-        self.last_mouse_pos = event.pos()
-        self.update()
-
     def mousePressEvent(self, event):
         self.last_mouse_pos = event.pos()
+        pos = (event.pos().x(), event.pos().y())
 
-        pos = [event.pos().x(), event.pos().y()]
-        for o in self.objects:
-            if o.in_bounds(pos):
-                o.select()
-                print("clicked:", o)
+        if self.mode == CanvasMode.NORMAL:
+            for o in self.objects:
+                if o.in_bounds(pos):
+                    o.select()
+                    print("clicked:", o)
+
+        elif self.mode == CanvasMode.DRAW_WIRE:
+            if self.active == None:
+                print("New wire")
+                new_wire = Wire([pos, pos]) # Need 2 points to define a line
+                self.active = new_wire
+                self.objects.append(new_wire)
+            elif self.active.__class__ == Wire:
+                print("Adding point")
+                self.active.add_point(pos)
+
+        elif self.mode == CanvasMode.DRAW_MODULE:
+            pass
 
         self.update()
 
+    def mouseMoveEvent(self, event):
+        if self.last_mouse_pos == None:
+            self.last_mouse_pos = event.pos()
 
+        dx = event.pos().x() - self.last_mouse_pos.x()
+        dy = event.pos().y() - self.last_mouse_pos.y()
+        pos = (event.pos().x(), event.pos().y())
+        #print(event.buttons() == Qt.NoButton)
+
+        if self.mode == CanvasMode.NORMAL:
+            for o in self.objects:
+                if o.selected:
+                    o.move(dx, dy)
+        elif self.mode == CanvasMode.DRAW_WIRE:
+            if self.active != None and self.active.__class__ == Wire:
+                self.active.remove_pt(-1)  # Remove the last point
+                self.active.add_point(pos) # Add it back
+        elif self.mode == CanvasMode.DRAW_MODULE:
+            pass
+
+        self.last_mouse_pos = event.pos()
+        self.update()
+
+    def mouseDoubleClickEvent(self, event):
+        self.last_mouse_pos = event.pos()
+        pos = (event.pos().x(), event.pos().y())
+
+        if self.mode == CanvasMode.NORMAL:
+            pass
+        elif self.mode == CanvasMode.DRAW_WIRE:
+            if self.active != None and self.active.__class__ == Wire:
+                print("Ending wire")
+                self.active.remove_pt(-1) # Remove the currently-drawing pt
+                self.active = None
+                self.mode = CanvasMode.NORMAL
+
+        elif self.mode == CanvasMode.DRAW_MODULE:
+            pass
+
+        self.update()
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_W:
+            # Go into wire drawing mode
+            self.mode = CanvasMode.DRAW_WIRE
+            self.active = None
+        elif event.key() == Qt.Key_M:
+            # Go into module drawing mode
+            self.mode = CanvasMode.DRAW_MODULE
+            self.active = None
+        elif event.key() == Qt.Key_Escape:
+            # Go into normal mode
+            self.mode = CanvasMode.NORMAL
+            self.active = None
+        print(self.mode)
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication()
